@@ -23,6 +23,7 @@ export class App {
 
   constructor() {
     const grid = new Grid(10, 8);
+    const r = ["top", "left", "right", "bottom"];
 
     afterNextRender(() => {
       const canvas = this.canvas().nativeElement;
@@ -88,9 +89,8 @@ export class App {
           cellY < grid.height
         ) {
           const index = cellY * grid.width + cellX;
-          const r = ["top", "left", "right", "bottom"];
-          grid.getVelocities(index).forEach((element, i) => {
-            console.log(r[i] + ": "+ element.toString());
+          grid.getVelocitiesArr(index).forEach((element, i) => {
+            console.log(r[i] + ": "+ element.toFixed(2));
             
           }); 
         }
