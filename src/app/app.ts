@@ -4,7 +4,6 @@ import {
   afterNextRender,
   viewChild,
 } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
 import { Grid } from '../grid';
 import { Vec2 } from '../vec';
 import { VelocityInteractor } from '../velocity-interactor';
@@ -25,6 +24,8 @@ export class App {
   
   r = ["top", "left", "right", "bottom"];
   grid: Grid | null = null;
+  showText = false;
+  showArrows = true;
 
   constructor() {
     afterNextRender(() => {
@@ -93,7 +94,7 @@ export class App {
           ctx.restore();
 
           this.drawPressures();
-          this.drawVelocities();
+          if(this.showArrows) this.drawVelocities();
         }
       };
 
@@ -133,33 +134,31 @@ export class App {
     let maxPressure = 8 * grid.cellSize.x;
 
     for (let i = 0; i < grid.pressures.length; i++) {
-        const pressure = grid.pressures[i];
+      const pressure = grid.pressures[i];
+    
+      const x = i % grid.width;
+      const y = Math.floor(i / grid.width);
+    
+      const px = x * grid.cellSize.x;
+      const py = y * grid.cellSize.y;
+      const intensity = Math.min(Math.abs(pressure) / maxPressure, 1);
       
-        const x = i % grid.width;
-        const y = Math.floor(i / grid.width);
-      
-        const px = x * grid.cellSize.x;
-        const py = y * grid.cellSize.y;
-
-        const intensity = Math.min(Math.abs(pressure) / maxPressure, 1);
-        
-        if (pressure > 0) {
-          ctx.fillStyle = this.lerpColor(colorZero, colorPositive, intensity);
-        } else {
-          ctx.fillStyle = this.lerpColor(colorZero, colorNegative, intensity);
-        }
-
-        ctx.fillRect(px, py, grid.cellSize.x, grid.cellSize.y);
-      
-        ctx.strokeRect(px, py, grid.cellSize.x, grid.cellSize.y);
-      
-        ctx.fillStyle = '#1e293b'; // Dark slate for better text readability
-        ctx.fillText(
-          pressure.toFixed(2),
-          px + grid.cellSize.x * .5,
-          py + grid.cellSize.y * .5
-        );
+      if (pressure > 0) {
+        ctx.fillStyle = this.lerpColor(colorZero, colorPositive, intensity);
+      } else {
+        ctx.fillStyle = this.lerpColor(colorZero, colorNegative, intensity);
       }
+      ctx.fillRect(px, py, grid.cellSize.x, grid.cellSize.y);
+    
+      // ctx.strokeRect(px, py, grid.cellSize.x, grid.cellSize.y);
+      if(!this.showText) continue;
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText(
+        pressure.toFixed(2),
+        px + grid.cellSize.x * .5,
+        py + grid.cellSize.y * .5
+      );
+    }
   }
 
   drawVelocities() {
