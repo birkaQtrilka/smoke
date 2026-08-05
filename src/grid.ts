@@ -9,7 +9,7 @@ export class Grid {
   public height: number,
   ) {
     this.pressures = new Float32Array(width * height);
-    this.velocities = new Array<Pair<number>>(width * height * 2);
+    this.velocities = new Array<Pair<number>>((width+1) * (height+1));
     const invalid =  Number.MIN_VALUE;
 
     const l = this.pressures.length;
@@ -22,10 +22,13 @@ export class Grid {
       if(x == width-1) {
         this.velocities[vi + 1] = new Pair(invalid, Grid.RandomSin()); // min value means invalid
       }
-      if( y == height - 1) {
+      if(y == height - 1) {
         this.velocities[vi + width + 1] = new Pair(Grid.RandomSin(), invalid);
       }
     }
+    this.velocities[width * height + height + width] = new Pair(invalid, invalid); 
+    // console.log("Last element: " +(width * height + height + width));
+    
   }
 
   static RandomSin(): number {
@@ -61,4 +64,5 @@ export class Grid {
     const r = this.getVelocities(pressureIndex);
     return [r.t, r.l, r.r, r.b];
   }
+
 }
