@@ -6,10 +6,11 @@ import {
 } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Grid } from '../grid';
+import { Vec2 } from '../vec';
+import { VelocityInteractor } from '../velocity-interactor';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -18,141 +19,160 @@ export class App {
   ctx: CanvasRenderingContext2D | undefined;
   readonly width = 800;
   readonly height = 800;
-  grid = new Grid(10, 10);
+  readonly timeStep = 0.1;
+  readonly density = 1;
+  interactor: VelocityInteractor | null = null; 
+  
   r = ["top", "left", "right", "bottom"];
+  grid: Grid | null = null;
 
   constructor() {
     afterNextRender(() => {
       const canvas = this.canvas().nativeElement;
-      const grid = this.grid;
       canvas.width = this.width;
       canvas.height = this.height;
+
       this.ctx = canvas.getContext('2d') ?? undefined; 
       const ctx = this.ctx;
-      console.log(grid.velocities.length);
-      console.log(grid.pressures.length);
       
       if (!ctx) {
         throw new Error('Could not get 2D rendering context.');
       }
-      const scaleFactor = 0.8;
       
-      const offsetX = (canvas.width * (1 - scaleFactor)) / 2;
-      const offsetY = (canvas.height * (1 - scaleFactor)) / 2;
-    
-      const cellWidth = canvas.width / grid.width;
-      const cellHeight = canvas.height / grid.height;
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const scaleFactor = 0.8;
+      const offsetX = (canvas.width * (1 - scaleFactor))  * .5;
+      const offsetY = (canvas.height * (1 - scaleFactor)) * .5;
+      
+      this.grid = new Grid(10, 10, this.density, this.timeStep);
+      this.grid.cellSize = new Vec2(canvas.width / this.grid.width, canvas.height / this.grid.height);
+      const grid = this.grid;
     
       ctx.translate(offsetX, offsetY);
       ctx.scale(scaleFactor, scaleFactor);
-
-      ctx.strokeStyle = '#cccccc';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 0, canvas.width, canvas.height);
-    
-      // Clear background
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-      ctx.strokeStyle = 'black';
-      ctx.fillStyle = 'black';
-      ctx.font = '14px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+       this.interactor = new VelocityInteractor(canvas, grid, offsetX, offsetY, scaleFactor);
+      this.interactor.attach();
       
-      grid.updatePressures();
 
-      for (let i = 0; i < grid.pressures.length; i++) {
+      let lastTime = 0;
+      let accumulator = 0;
+      
+      const fixedTimeStepMs = this.timeStep * 1000; 
+
+      const render = (currentTime: number) => {
+        requestAnimationFrame(render);
+
+        if (lastTime === 0) {
+          lastTime = currentTime;
+        }
+
+        let deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        if (deltaTime > 250) {
+          deltaTime = 250; 
+        }
+
+        accumulator += deltaTime;
+
+        let simulationUpdated = false;
+
+        while (accumulator >= fixedTimeStepMs) {
+          for (let i = 0; i < 5; i++) {
+            grid.updatePressures();
+          }
+          
+          accumulator -= fixedTimeStepMs;
+          simulationUpdated = true;
+        }
+
+        if (simulationUpdated) {
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          this.drawVelocities();
+          this.drawPressures();
+        }
+      };
+
+      requestAnimationFrame(render);
+    });
+  }
+
+  drawPressures() {
+    const canvas = this.canvas()?.nativeElement;
+    const { grid, ctx } = this;
+    
+    if (!canvas || !ctx || !grid) return;
+
+    ctx.strokeStyle = 'black';
+    ctx.fillStyle = 'black';
+    ctx.lineWidth = 1;
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < grid.pressures.length; i++) {
         const pressure = grid.pressures[i];
       
         const x = i % grid.width;
         const y = Math.floor(i / grid.width);
       
-        const px = x * cellWidth;
-        const py = y * cellHeight;
+        const px = x * grid.cellSize.x;
+        const py = y * grid.cellSize.y;
       
-        ctx.strokeRect(px, py, cellWidth, cellHeight);
+        ctx.strokeRect(px, py, grid.cellSize.x, grid.cellSize.y);
       
         ctx.fillText(
           pressure.toFixed(2),
-          px + cellWidth / 2,
-          py + cellHeight / 2
+          px + grid.cellSize.x * .5,
+          py + grid.cellSize.y * .5
         );
       }
-
-      this.drawVelocities();
-
-      canvas.addEventListener('mousemove', (event) => {
-        const rect = canvas.getBoundingClientRect();
-      
-        // Mouse position relative to canvas
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-      
-        // Convert to cell coordinates
-        const cellX = Math.floor(mouseX / cellWidth);
-        const cellY = Math.floor(mouseY / cellHeight);
-      
-        // Check bounds
-        if (
-          cellX >= 0 &&
-          cellX < grid.width &&
-          cellY >= 0 &&
-          cellY < grid.height
-        ) {
-          const index = cellY * grid.width + cellX;
-          grid.getVelocitiesArr(index).forEach((element, i) => {
-            console.log(this.r[i] + ": "+ element.toFixed(2));
-          }); 
-        }
-      });
-    });
   }
 
   drawVelocities() {
-    const grid = this.grid;
-    const canvas = this.canvas().nativeElement;
-    const ctx = this.ctx;
+    const canvas = this.canvas()?.nativeElement;
+    const { grid, ctx } = this;
     
-    if (canvas == null || ctx == null) return;
+    if (!canvas || !ctx || !grid) return;
     
     const cellWidth = canvas.width / grid.width;
     const cellHeight = canvas.height / grid.height;
-
     const vel_w = grid.width + 1;
-
+    
+    const VELOCITY_SCALE = 30;
+    
     ctx.strokeStyle = 'red';
     ctx.fillStyle = 'red';
     ctx.lineWidth = 1.5;
 
     for (let i = 0; i < grid.velocities.length; i++) {
-      const v = grid.velocities[i];
+      const { top, left } = grid.velocities[i];
+      
       const x = i % vel_w;
       const y = Math.floor(i / vel_w);
 
-      let px = (x + .5) * cellWidth;
-      let py = (y) * cellHeight;
-
-      let dy = v.top == Number.MIN_VALUE ? 0 : v.top;
-
-      const scale = 30; 
-
-      const endY = py + dy * scale;
-
+      const dy = top === Number.MIN_VALUE ? 0 : top;
+      
       if (dy !== 0) {
-        this.drawArrow(ctx, px, py, px, endY);
+        const topX = (x + 0.5) * cellWidth;
+        const topY = y * cellHeight;
+        const endY = topY + dy * VELOCITY_SCALE;
+        
+        this.drawArrow(ctx, topX, topY, topX, endY);
       }
 
-      px = x * cellWidth;
-      py = (y + .5) * cellHeight;
-      let dx = v.left == Number.MIN_VALUE ? 0 : v.left;
+      const dx = left === Number.MIN_VALUE ? 0 : left;
       
-      const endX = px + dx * scale;
-
       if (dx !== 0) {
-        this.drawArrow(ctx, px, py, endX, py);
+        const leftX = x * cellWidth;
+        const leftY = (y + 0.5) * cellHeight;
+        const endX = leftX + dx * VELOCITY_SCALE;
+        
+        this.drawArrow(ctx, leftX, leftY, endX, leftY);
       }
     }
   }
