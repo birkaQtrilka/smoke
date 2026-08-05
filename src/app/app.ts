@@ -92,8 +92,8 @@ export class App {
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.restore();
 
-          this.drawVelocities();
           this.drawPressures();
+          this.drawVelocities();
         }
       };
 
@@ -101,18 +101,36 @@ export class App {
     });
   }
 
+  private hexToRgb(hex: string): [number, number, number] {
+    const cleanHex = hex.replace('#', '');
+    const bigint = parseInt(cleanHex, 16);
+    return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+  }
+
+  private lerpColor(color1: [number, number, number], color2: [number, number, number], t: number): string {
+    const r = Math.round(color1[0] + (color2[0] - color1[0]) * t);
+    const g = Math.round(color1[1] + (color2[1] - color1[1]) * t);
+    const b = Math.round(color1[2] + (color2[2] - color1[2]) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  } 
+
   drawPressures() {
     const canvas = this.canvas()?.nativeElement;
     const { grid, ctx } = this;
     
     if (!canvas || !ctx || !grid) return;
 
-    ctx.strokeStyle = 'black';
-    ctx.fillStyle = 'black';
+    const colorNegative = this.hexToRgb('#0ea5e9');
+    const colorZero     = this.hexToRgb('#f8fafc');
+    const colorPositive = this.hexToRgb('#f43f5e');
+
+    ctx.strokeStyle = 'rgba(0,0,0, 0.2)'; // Softer border color
     ctx.lineWidth = 1;
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+
+    let maxPressure = 8 * grid.cellSize.x;
 
     for (let i = 0; i < grid.pressures.length; i++) {
         const pressure = grid.pressures[i];
@@ -122,9 +140,20 @@ export class App {
       
         const px = x * grid.cellSize.x;
         const py = y * grid.cellSize.y;
+
+        const intensity = Math.min(Math.abs(pressure) / maxPressure, 1);
+        
+        if (pressure > 0) {
+          ctx.fillStyle = this.lerpColor(colorZero, colorPositive, intensity);
+        } else {
+          ctx.fillStyle = this.lerpColor(colorZero, colorNegative, intensity);
+        }
+
+        ctx.fillRect(px, py, grid.cellSize.x, grid.cellSize.y);
       
         ctx.strokeRect(px, py, grid.cellSize.x, grid.cellSize.y);
       
+        ctx.fillStyle = '#1e293b'; // Dark slate for better text readability
         ctx.fillText(
           pressure.toFixed(2),
           px + grid.cellSize.x * .5,
