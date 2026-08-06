@@ -1,5 +1,7 @@
 <canvas #canvas></canvas>
 <div></div>
-<button (click)="showText = !showText">Show Text</button>
+<button (click)="getDrawer().showPressureTxt = !getDrawer().showPressureTxt">Show Text</button>
 <div></div>
-<button (click)="showArrows = !showArrows">Show Arrows</button>
+<button (click)="getDrawer().showVelocities = !getDrawer().showVelocities">Show Arrows</button>
+<div></div>
+<button (click)="getDrawer().showField = !getDrawer().showField">Show Field</button>
