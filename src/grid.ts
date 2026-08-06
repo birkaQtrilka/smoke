@@ -1,11 +1,15 @@
 import { Cell } from "./cell";
 import { INVALID } from "./invalid.const";
 import { Pair } from "./pair";
+import { PNeighbours, PressureData } from "./pressure-data";
 import { Vec2 } from "./vec";
 
 export class Grid {
   public pressures: Float32Array;
+  public solidMap: Array<boolean>;
   public velocities: Pair<number>[]; //to do: flatten it later
+
+
   constructor(
   public width: number,
   public height: number,
@@ -15,7 +19,9 @@ export class Grid {
   ) {
     this.pressures = new Float32Array(width * height);
     this.velocities = new Array<Pair<number>>((width+1) * (height+1));
+    this.solidMap = new Array<boolean>(this.width* this.height);
 
+    this.initSolidMap();
     const l = this.pressures.length;
     for (let i = 0; i < l; i++) {
       const x = i % width;
@@ -24,13 +30,25 @@ export class Grid {
 
       this.velocities[vi] = new Pair(Grid.RandomSin(), Grid.RandomSin());
       if(x == width-1) {
-        this.velocities[vi + 1] = new Pair(INVALID, Grid.RandomSin());
+        this.velocities[vi + 1] = new Pair(INVALID, 0);
       }
       if(y == height - 1) {
-        this.velocities[vi + width + 1] = new Pair(Grid.RandomSin(), INVALID);
+        this.velocities[vi + width + 1] = new Pair(0, INVALID);
       }
     }
     this.velocities[width * height + height + width] = new Pair(INVALID, INVALID); 
+  }
+
+  initSolidMap() {
+    for (let i = 0; i < this.width; i++) {
+      this.solidMap[i] = true;
+      this.solidMap[i + this.width*(this.height - 1)] = true;      
+    }
+
+    for (let i = 0; i < this.width * this.height; i+= this.width) {
+      this.solidMap[i] = true;
+      this.solidMap[i + this.width - 1] = true;      
+    }
   }
   
   getDivergence(c: Cell): number {
@@ -48,38 +66,72 @@ export class Grid {
     return Math.random() * (max - min) + min;
   }
 
+  isSolid(cellIndex: number): boolean {
+    return this.solidMap[cellIndex];
+  }
+
+  //todo: get velocity looks at cell to the right and clamp? 
+
   updatePressures() {
     const l = this.pressures.length;
     for (let i = 0; i < l; i++) {
-      const v = this.getVelocities(i);
-      const p = this.getPressures(i);
+      if (this.isSolid(i)) {
+        this.pressures[i] = 0;
+        continue;
+      }
 
-      const pSum = p.t + p.l + p.r + p.b;
-      const deltaVelocitySum = v.r - v.l + v.b - v.t; 
-      // to do: figure out what needs to change for varied cellsize
-      this.pressures[i] = (pSum - this.density * this.cellSize.x * deltaVelocitySum / this.timeStep) *.25; 
+      const x = i % this.width;
+      const y = Math.floor(i / this.width);
+      const v = this.getVelocities(i);
+      const p = this.getPressures(i, x, y);
+      
+      const total = p.t.notSolid + p.l.notSolid + p.r.notSolid + p.b.notSolid;
+      
+      if (total === 0) {
+        this.pressures[i] = 0;
+        continue;
+      }
+
+      const pSum = p.t.val * p.t.notSolid + p.l.val * p.l.notSolid + p.r.val * p.r.notSolid + p.b.val * p.b.notSolid;
+      const deltaVelocitySum = v.r * p.r.notSolid - v.l * p.l.notSolid + v.b * p.b.notSolid - v.t * p.t.notSolid; 
+
+      this.pressures[i] = (pSum - this.density * this.cellSize.x * deltaVelocitySum / this.timeStep) / total; 
     }
   }
 
-  updateVelocities() {
+  updateVelocities() { 
     const K = this.timeStep / (this.cellSize.x * this.density);
     const l = this.pressures.length;
+    
     for (let i = 0; i < l; i++) {
       const y = Math.floor(i / this.width);
       const x = i % this.width;
-      // if(x)
       const vi = i + y;
       
-      const pc = this.pressures[i];
-      const pt = y-1 >= 0 ? this.pressures[i - this.width] : 0;
-      const pl = x-1 >= 0 ? this.pressures[i - 1] : 0;
-      
-      const n =new Pair<number> (
-        K * (pc-pt), // top
-        K * (pc-pl)  // left
-      );
+      let vTop = this.velocities[vi].top;
+      let vLeft = this.velocities[vi].left;
 
-      this.velocities[vi] = this.subs(this.velocities[vi], n);
+      const isCurrentSolid = this.isSolid(i);
+      const isTopSolid = (y - 1 < 0) || this.isSolid(i - this.width);
+      const isLeftSolid = (x - 1 < 0) || this.isSolid(i - 1);
+
+      if (!isCurrentSolid && !isTopSolid) {
+        const pc = this.pressures[i];
+        const pt = this.pressures[i - this.width];
+        vTop -= K * (pc - pt);
+      } else {
+        vTop = 0; 
+      }
+
+      if (!isCurrentSolid && !isLeftSolid) {
+        const pc = this.pressures[i];
+        const pl = this.pressures[i - 1];
+        vLeft -= K * (pc - pl);
+      } else {
+        vLeft = 0;
+      }
+
+      this.velocities[vi] = new Pair(vTop, vLeft);
     }
   }
 
@@ -113,24 +165,27 @@ export class Grid {
     return new Cell(t,l,r,b);
   }
 
-  getPressures(pressureIndex: number): Cell {
-    const x = pressureIndex % this.width;
-    const y = Math.floor(pressureIndex / this.width);
-
-    const t = y-1 >=   0 ? this.pressures[pressureIndex - this.width] : 0;
-    const l = x-1 >= 0 ? this.pressures[pressureIndex - 1] : 0;
-    const r = x+1 < this.width ? this.pressures[pressureIndex + 1] : 0;
-    const b = y+1 < this.height ? this.pressures[pressureIndex + this.width] : 0;
-    return new Cell(t,l,r,b);
+  getPressures(pIndx: number, x: number, y: number): PNeighbours {    
+    const t = y-1 >= 0 ? this.getPressure(pIndx - this.width) : PressureData.O;
+    const l = x-1 >= 0 ? this.getPressure(pIndx - 1) : PressureData.O;
+    const r = x+1 < this.width ? this.getPressure(pIndx + 1) : PressureData.O;
+    const b = y+1 < this.height ? this.getPressure(pIndx + this.width) : PressureData.O;
+    return new PNeighbours(t,l,r,b);
   }
 
-  getPressuresFromVel() {
-
+  getPressure(pIndx: number): PressureData {
+    return new PressureData(this.pressures[pIndx], this.isSolid(pIndx) ? 0 : 1);
   }
+
+  // getPressuresxy(pressureIndex: number): Cell {
+  //   const x = pressureIndex % this.width;
+  //   const y = Math.floor(pressureIndex / this.width);
+
+  //   return this.getPressures(pressureIndex, x, y);
+  // }
 
   getVelocitiesArr(pressureIndex: number): number[] {
     const r = this.getVelocities(pressureIndex);
     return [r.t, r.l, r.r, r.b];
   }
-
 }

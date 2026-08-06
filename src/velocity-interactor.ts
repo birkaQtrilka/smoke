@@ -90,7 +90,7 @@ export class VelocityInteractor {
     const deltaX = pos.x - this.lastMousePos.x;
     const deltaY = pos.y - this.lastMousePos.y;
     this.lastMousePos = pos;
-
+    // to do, change logic to be implementation agnostic
     const pIndex = this.activeEdge.pressureIndex;
     const y = Math.floor(pIndex / this.grid.width);
     const vi = pIndex + y;

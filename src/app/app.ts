@@ -116,6 +116,10 @@ export class App {
     return `rgb(${r}, ${g}, ${b})`;
   } 
 
+  rgbToString(rgb: [number,number,number]): string{
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`; 
+  }
+
   drawPressures() {
     const canvas = this.canvas()?.nativeElement;
     const { grid, ctx } = this;
@@ -149,9 +153,10 @@ export class App {
       } else {
         ctx.fillStyle = this.lerpColor(colorZero, colorNegative, intensity);
       }
+      if(grid.isSolid(i)) ctx.fillStyle = this.rgbToString(colorNegative);
+      // else ctx.fillStyle = this.rgbToString(colorPositive);
       ctx.fillRect(px, py, grid.cellSize.x, grid.cellSize.y);
     
-      // ctx.strokeRect(px, py, grid.cellSize.x, grid.cellSize.y);
       if(!this.showText) continue;
       ctx.fillStyle = '#1e293b';
       ctx.fillText(
