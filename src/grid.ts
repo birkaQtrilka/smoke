@@ -28,7 +28,7 @@ export class Grid {
       const y = Math.floor(i / width);
       const vi = i + y;
 
-      this.velocities[vi] = new Pair(Grid.RandomSin(), Grid.RandomSin());
+      this.velocities[vi] = new Pair(0,0);
       if(x == width-1) {
         this.velocities[vi + 1] = new Pair(INVALID, 0);
       }
@@ -37,6 +37,95 @@ export class Grid {
       }
     }
     this.velocities[width * height + height + width] = new Pair(INVALID, INVALID); 
+  }
+  // Gets horizontal velocity (U) from the left face of cell(x, y)
+  getU(x: number, y: number): number {
+    x = Math.max(0, Math.min(x, this.width));
+    y = Math.max(0, Math.min(y, this.height - 1));
+    const vi = x + y * (this.width + 1);
+    return this.velocities[vi].left;
+  }
+
+  // Gets vertical velocity (V) from the top face of cell(x, y)
+  getV(x: number, y: number): number {
+    x = Math.max(0, Math.min(x, this.width - 1));
+    y = Math.max(0, Math.min(y, this.height));
+    const vi = x + y * (this.width + 1);
+    return this.velocities[vi].top;
+  }
+
+  sampleU(px: number, py: number): number {
+    // U velocities are centered vertically on the face, so we shift Y by 0.5
+    const sampleY = py - 0.5;
+    
+    // Find the 4 neighboring grid points
+    const x0 = Math.floor(px);
+    const y0 = Math.floor(sampleY);
+    const x1 = x0 + 1;
+    const y1 = y0 + 1;
+
+    // Fractional distances for lerping
+    const tx = px - x0;
+    const ty = sampleY - y0;
+
+    // Fetch the 4 surrounding U velocities
+    const u00 = this.getU(x0, y0);
+    const u10 = this.getU(x1, y0);
+    const u01 = this.getU(x0, y1);
+    const u11 = this.getU(x1, y1);
+
+    // Bilinear interpolation
+    const u0 = this.lerp(u00, u10, tx); // Bottom edge
+    const u1 = this.lerp(u01, u11, tx); // Top edge
+    return this.lerp(u0, u1, ty);       // Vertical blend
+  }
+
+  sampleV(px: number, py: number): number {
+    // V velocities are centered horizontally on the face, so we shift X by 0.5
+    const sampleX = px - 0.5;
+
+    const x0 = Math.floor(sampleX);
+    const y0 = Math.floor(py);
+    const x1 = x0 + 1;
+    const y1 = y0 + 1;
+
+    const tx = sampleX - x0;
+    const ty = py - y0;
+
+    const v00 = this.getV(x0, y0);
+    const v10 = this.getV(x1, y0);
+    const v01 = this.getV(x0, y1);
+    const v11 = this.getV(x1, y1);
+
+    const v0 = this.lerp(v00, v10, tx);
+    const v1 = this.lerp(v01, v11, tx);
+    return this.lerp(v0, v1, ty);
+  }
+
+  sampleBilinear(worldX: number, worldY: number): Pair<number> {
+    // Convert world space directly to grid space
+    const px = worldX / this.cellSize.x;
+    const py = worldY / this.cellSize.y;
+
+    // Sample fields independently
+    const vx = this.sampleU(px, py);
+    const vy = this.sampleV(px, py);
+
+    // Your Pair constructor is Pair(top, left), which translates to Pair(V, U).
+    // Be careful with this order!
+    return new Pair<number>(vy, vx); 
+  }
+
+  clamp(num: number, min: number, max: number) { return Math.min(Math.max(num, min), max);}
+  clamp01(num: number) {
+    return Math.min(Math.max(num, 0), 1);
+  }
+  lerp(start: number, stop: number, amt: number): number {
+    return start + (stop - start) * amt;
+  }
+
+  toIndex(x: number, y: number): number {
+    return y * this.width + x;
   }
 
   initSolidMap() {
@@ -49,6 +138,7 @@ export class Grid {
       this.solidMap[i] = true;
       this.solidMap[i + this.width - 1] = true;      
     }
+
   }
   
   getDivergence(c: Cell): number {
@@ -155,6 +245,10 @@ export class Grid {
 
   getVelocities(pressureIndex: number): Cell {
     const y = Math.floor(pressureIndex / this.width);
+    return this.getVelocities_y(pressureIndex, y);
+  }
+
+  getVelocities_y(pressureIndex: number, y: number): Cell {
     const vi = pressureIndex + y;
     const t_l = this.velocities[vi];
 
@@ -164,6 +258,7 @@ export class Grid {
     const b = this.velocities[vi + this.width + 1].top;
     return new Cell(t,l,r,b);
   }
+
 
   getPressures(pIndx: number, x: number, y: number): PNeighbours {    
     const t = y-1 >= 0 ? this.getPressure(pIndx - this.width) : PressureData.O;

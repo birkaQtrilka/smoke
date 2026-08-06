@@ -41,7 +41,7 @@ export class App {
         throw new Error('Could not get 2D rendering context.');
       }
       
-      const scaleFactor = 0.8;
+      const scaleFactor = 1;
       const offsetX = (canvas.width * (1 - scaleFactor))  * .5;
       const offsetY = (canvas.height * (1 - scaleFactor)) * .5;
       
@@ -96,6 +96,7 @@ export class App {
 
           this.drawPressures();
           if(this.showArrows) this.drawVelocities();
+          this.drawFlow();
         }
       };
 
@@ -211,7 +212,38 @@ export class App {
     }
   }
 
-  private drawArrow(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number) {
+  drawFlow() {
+    const canvas = this.canvas()?.nativeElement;
+    const { grid, ctx } = this;
+    
+    if (!canvas || !ctx || !grid) return;
+    
+    const vel_w = grid.width * 5;
+    const vel_h = grid.height * 5;
+    const cellWidth = canvas.width / vel_w;
+    const cellHeight = canvas.height / vel_h;
+    
+    const VELOCITY_SCALE = 30;
+    
+    ctx.strokeStyle = 'black';
+    ctx.fillStyle = 'red';
+    ctx.lineWidth = 1.5;
+    for (let y = 0; y < vel_w; y++) {
+      for (let x = 0; x < vel_h; x++) {
+        const leftX = x * cellWidth;
+        const leftY = y * cellHeight;
+        const vel = grid.sampleBilinear(leftX, leftY);
+        
+        const endX = leftX + vel.left * VELOCITY_SCALE;
+        const endY = leftY + vel.top * VELOCITY_SCALE;
+
+        this.drawArrow(ctx, leftX, leftY, endX, endY, false);
+      }
+    }
+       
+  }
+
+  private drawArrow(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, head: boolean = true) {
     const headLength = 6; // length of the arrow head in pixels
     const dx = toX - fromX;
     const dy = toY - fromY;
@@ -221,6 +253,8 @@ export class App {
     ctx.moveTo(fromX, fromY);
     ctx.lineTo(toX, toY);
     ctx.stroke();
+    
+    if(!head) return;
 
     ctx.beginPath();
     ctx.moveTo(toX, toY);
