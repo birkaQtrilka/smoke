@@ -7,6 +7,7 @@ import {
 import { Grid } from '../grid';
 import { Vec2 } from '../vec';
 import { VelocityInteractor } from '../velocity-interactor';
+import { INVALID } from '../invalid.const';
 
 @Component({
   selector: 'app-root',
@@ -78,10 +79,10 @@ export class App {
         let simulationUpdated = false;
 
         while (accumulator >= fixedTimeStepMs) {
-          for (let i = 0; i < 5; i++) {
+          for (let i = 0; i < 10; i++) {
             grid.updatePressures();
           }
-          
+          grid.updateVelocities();
           accumulator -= fixedTimeStepMs;
           simulationUpdated = true;
         }
@@ -183,7 +184,7 @@ export class App {
       const x = i % vel_w;
       const y = Math.floor(i / vel_w);
 
-      const dy = top === Number.MIN_VALUE ? 0 : top;
+      const dy = top === INVALID ? 0 : top;
       
       if (dy !== 0) {
         const topX = (x + 0.5) * cellWidth;
@@ -193,7 +194,7 @@ export class App {
         this.drawArrow(ctx, topX, topY, topX, endY);
       }
 
-      const dx = left === Number.MIN_VALUE ? 0 : left;
+      const dx = left === INVALID ? 0 : left;
       
       if (dx !== 0) {
         const leftX = x * cellWidth;

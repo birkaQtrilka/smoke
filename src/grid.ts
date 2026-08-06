@@ -1,4 +1,5 @@
 import { Cell } from "./cell";
+import { INVALID } from "./invalid.const";
 import { Pair } from "./pair";
 import { Vec2 } from "./vec";
 
@@ -14,7 +15,6 @@ export class Grid {
   ) {
     this.pressures = new Float32Array(width * height);
     this.velocities = new Array<Pair<number>>((width+1) * (height+1));
-    const invalid =  Number.MIN_VALUE;
 
     const l = this.pressures.length;
     for (let i = 0; i < l; i++) {
@@ -24,15 +24,13 @@ export class Grid {
 
       this.velocities[vi] = new Pair(Grid.RandomSin(), Grid.RandomSin());
       if(x == width-1) {
-        this.velocities[vi + 1] = new Pair(invalid, Grid.RandomSin()); // min value means invalid
+        this.velocities[vi + 1] = new Pair(INVALID, Grid.RandomSin());
       }
       if(y == height - 1) {
-        this.velocities[vi + width + 1] = new Pair(Grid.RandomSin(), invalid);
+        this.velocities[vi + width + 1] = new Pair(Grid.RandomSin(), INVALID);
       }
     }
-    this.velocities[width * height + height + width] = new Pair(invalid, invalid); 
-    // console.log("Last element: " +(width * height + height + width));
-    
+    this.velocities[width * height + height + width] = new Pair(INVALID, INVALID); 
   }
   
   getDivergence(c: Cell): number {
@@ -50,24 +48,50 @@ export class Grid {
     return Math.random() * (max - min) + min;
   }
 
-  updatePressures(){
+  updatePressures() {
     const l = this.pressures.length;
     for (let i = 0; i < l; i++) {
       const v = this.getVelocities(i);
       const p = this.getPressures(i);
 
       const pSum = p.t + p.l + p.r + p.b;
-      const deltaVelocitySum = v.r - v.l + v.t - v.b; 
+      const deltaVelocitySum = v.r - v.l + v.b - v.t; 
       // to do: figure out what needs to change for varied cellsize
       this.pressures[i] = (pSum - this.density * this.cellSize.x * deltaVelocitySum / this.timeStep) *.25; 
     }
   }
 
-  setVelocities(pressureIndex: number, t: number = Number.MIN_VALUE, l: number = Number.MIN_VALUE, b: number = Number.MIN_VALUE, r: number = Number.MIN_VALUE) {
+  updateVelocities() {
+    const K = this.timeStep / (this.cellSize.x * this.density);
+    const l = this.pressures.length;
+    for (let i = 0; i < l; i++) {
+      const y = Math.floor(i / this.width);
+      const x = i % this.width;
+      // if(x)
+      const vi = i + y;
+      
+      const pc = this.pressures[i];
+      const pt = y-1 >= 0 ? this.pressures[i - this.width] : 0;
+      const pl = x-1 >= 0 ? this.pressures[i - 1] : 0;
+      
+      const n =new Pair<number> (
+        K * (pc-pt), // top
+        K * (pc-pl)  // left
+      );
+
+      this.velocities[vi] = this.subs(this.velocities[vi], n);
+    }
+  }
+
+  subs(old: Pair<number>, n: Pair<number>): Pair<number> {
+    return new Pair<number>(old.top - n.top, old.left - n.left);
+  }
+
+  setVelocities(pressureIndex: number, t: number = INVALID, l: number = INVALID, b: number = INVALID, r: number = INVALID) {
     const y = Math.floor(pressureIndex / this.width);
     const vi = pressureIndex + y;
     function orDefault(n: number, def: number): number {
-      return n == Number.MIN_VALUE ? def : n;
+      return n == INVALID ? def : n;
     }
     let copy = this.velocities[vi];
     this.velocities[vi] = new Pair(orDefault(t, copy.top), orDefault(l, copy.left));
@@ -93,11 +117,15 @@ export class Grid {
     const x = pressureIndex % this.width;
     const y = Math.floor(pressureIndex / this.width);
 
-    const t = y-1 > 0 ? this.pressures[pressureIndex - this.width] : 0;
-    const l = x-1 > 0 ? this.pressures[pressureIndex - 1] : 0;
+    const t = y-1 >=   0 ? this.pressures[pressureIndex - this.width] : 0;
+    const l = x-1 >= 0 ? this.pressures[pressureIndex - 1] : 0;
     const r = x+1 < this.width ? this.pressures[pressureIndex + 1] : 0;
     const b = y+1 < this.height ? this.pressures[pressureIndex + this.width] : 0;
     return new Cell(t,l,r,b);
+  }
+
+  getPressuresFromVel() {
+
   }
 
   getVelocitiesArr(pressureIndex: number): number[] {

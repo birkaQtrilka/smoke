@@ -1,4 +1,5 @@
 import { Grid } from "./grid";
+import { INVALID } from "./invalid.const";
 
 export class VelocityInteractor {
   private isDragging = false;
@@ -19,7 +20,6 @@ export class VelocityInteractor {
 
   attach() {
     this.canvas.addEventListener('mousedown', this.onMouseDown);
-    // Bind move/up to window so dragging works even if the mouse leaves the canvas momentarily
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('mouseup', this.onMouseUp);
   }
@@ -95,8 +95,8 @@ export class VelocityInteractor {
     const y = Math.floor(pIndex / this.grid.width);
     const vi = pIndex + y;
 
-    // Use Number.MIN_VALUE to preserve untouched values inside your setVelocities method
-    let t = Number.MIN_VALUE, l = Number.MIN_VALUE, b = Number.MIN_VALUE, r = Number.MIN_VALUE;
+    // Use INVALID to preserve untouched values inside your setVelocities method
+    let t = INVALID, l = INVALID, b = INVALID, r = INVALID;
 
     // Add delta scaled down by drawing scale so the arrow perfectly follows the cursor
     if (this.activeEdge.type === 't') {

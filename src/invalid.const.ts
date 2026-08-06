@@ -1,0 +1,1 @@
+export const INVALID: number = Number.MAX_VALUE; 
