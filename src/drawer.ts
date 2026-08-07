@@ -1,13 +1,14 @@
 import { Grid } from "./grid";
 import { INVALID } from "./invalid.const";
 
+export const VELOCITY_SCALE = 1;
 export class GridDrawer {
   private readonly ctx: CanvasRenderingContext2D;
   public readonly offsetX: number;
   public readonly offsetY: number;
   public showPressureTxt: boolean = false;
-  public showVelocities: boolean = false;
-  public showField: boolean = false;
+  public showVelocities: boolean = true;
+  public showField: boolean = true;
 
   constructor(
     private readonly grid: Grid,
@@ -64,7 +65,7 @@ export class GridDrawer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    let maxPressure = 8 * grid.cellSize.x;
+    let maxPressure = 400 * grid.cellSize.x;
 
     for (let i = 0; i < grid.pressures.length; i++) {
       const pressure = grid.pressures[i];
@@ -102,7 +103,6 @@ export class GridDrawer {
     const cellHeight = canvas.height / grid.height;
     const vel_w = grid.width + 1;
     
-    const VELOCITY_SCALE = 30;
     
     ctx.strokeStyle = 'red';
     ctx.fillStyle = 'red';
@@ -122,7 +122,7 @@ export class GridDrawer {
         const endY = topY + dy * VELOCITY_SCALE;
         this.drawArrow(ctx, topX, topY, topX, endY);
       } else {
-        this.drawArrow(ctx, topX, topY, topX, topY + .1 *VELOCITY_SCALE, false);
+        this.drawArrow(ctx, topX, topY, topX, topY + 2 * VELOCITY_SCALE, false);
       }
 
       const dx = left === INVALID ? 0 : left;
@@ -133,7 +133,7 @@ export class GridDrawer {
         const endX = leftX + dx * VELOCITY_SCALE;
         this.drawArrow(ctx, leftX, leftY, endX, leftY);
       }else {
-        this.drawArrow(ctx, leftX, leftY, leftX + .1 * VELOCITY_SCALE, leftY, false);
+        this.drawArrow(ctx, leftX, leftY, leftX + 2 * VELOCITY_SCALE, leftY, false);
       }
     }
   }
@@ -145,8 +145,6 @@ export class GridDrawer {
     const vel_h = grid.height * 5;
     const cellWidth = canvas.width / vel_w;
     const cellHeight = canvas.height / vel_h;
-    
-    const VELOCITY_SCALE = 30;
     
     ctx.strokeStyle = 'black';
     ctx.fillStyle = 'red';

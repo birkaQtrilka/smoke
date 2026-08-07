@@ -1,3 +1,4 @@
+import { VELOCITY_SCALE } from "./drawer";
 import { Grid } from "./grid";
 import { INVALID } from "./invalid.const";
 
@@ -8,7 +9,6 @@ export class VelocityInteractor {
   
   // Max distance from edge center to click (in scaled pixels)
   private readonly interactionRadius = 15; 
-  private readonly VELOCITY_SCALE = 30; // Matches your drawing scale
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -100,13 +100,13 @@ export class VelocityInteractor {
 
     // Add delta scaled down by drawing scale so the arrow perfectly follows the cursor
     if (this.activeEdge.type === 't') {
-      t = this.grid.velocities[vi].top + (deltaY / this.VELOCITY_SCALE);
+      t = this.grid.velocities[vi].top + (deltaY / VELOCITY_SCALE);
     } else if (this.activeEdge.type === 'l') {
-      l = this.grid.velocities[vi].left + (deltaX / this.VELOCITY_SCALE);
+      l = this.grid.velocities[vi].left + (deltaX / VELOCITY_SCALE);
     } else if (this.activeEdge.type === 'b') {
-      b = this.grid.velocities[vi + this.grid.width + 1].top + (deltaY / this.VELOCITY_SCALE);
+      b = this.grid.velocities[vi + this.grid.width + 1].top + (deltaY / VELOCITY_SCALE);
     } else if (this.activeEdge.type === 'r') {
-      r = this.grid.velocities[vi + 1].left + (deltaX / this.VELOCITY_SCALE);
+      r = this.grid.velocities[vi + 1].left + (deltaX / VELOCITY_SCALE);
     }
 
     // Call your implemented method on the grid

@@ -7,7 +7,6 @@ import {
 import { Grid } from '../grid';
 import { Vec2 } from '../vec';
 import { VelocityInteractor } from '../velocity-interactor';
-import { INVALID } from '../invalid.const';
 import { GridDrawer } from '../drawer';
 
 @Component({
@@ -20,7 +19,7 @@ export class App {
   ctx: CanvasRenderingContext2D | undefined;
   readonly width = 800;
   readonly height = 800;
-  readonly timeStep = 0.1;
+  readonly timeStep = 0.001;
   readonly density = 1;
   interactor: VelocityInteractor | null = null; 
   
@@ -28,6 +27,9 @@ export class App {
   grid: Grid | null = null;
   drawer: GridDrawer | undefined;
 
+  solver = true;
+  advect = true;
+  
   constructor() {
     afterNextRender(() => {
       const canvas = this.canvas().nativeElement;
@@ -35,9 +37,8 @@ export class App {
       canvas.height = this.height;
 
       const scaleFactor = 1;
-
       
-      this.grid = new Grid(10, 10, this.density, this.timeStep);
+      this.grid = new Grid(20, 20, this.density, this.timeStep);
       this.grid.cellSize = new Vec2(canvas.width / this.grid.width, canvas.height / this.grid.height);
       const grid = this.grid;
 
@@ -70,10 +71,10 @@ export class App {
         let simulationUpdated = false;
 
         while (accumulator >= fixedTimeStepMs) {
-          for (let i = 0; i < 10; i++) {
-            grid.updatePressures();
-          }
+          if(this.solver) grid.iteratePressureUpdates();
           grid.updateVelocities();
+
+          if(this.advect) grid.advectVelocities();
           accumulator -= fixedTimeStepMs;
           simulationUpdated = true;
         }

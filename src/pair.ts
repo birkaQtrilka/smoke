@@ -5,4 +5,7 @@ export class Pair<T> {
   ){
 
   }
+  static copy<T>(p: Pair<T>): Pair<T> {
+    return new Pair(p.top, p.left);
+  }
 }

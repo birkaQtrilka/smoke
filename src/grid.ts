@@ -8,7 +8,7 @@ export class Grid {
   public pressures: Float32Array;
   public solidMap: Array<boolean>;
   public velocities: Pair<number>[]; //to do: flatten it later
-
+  public temp_velocities: Pair<number>[]; //to do: flatten it later
 
   constructor(
   public width: number,
@@ -19,6 +19,7 @@ export class Grid {
   ) {
     this.pressures = new Float32Array(width * height);
     this.velocities = new Array<Pair<number>>((width+1) * (height+1));
+    this.temp_velocities = new Array<Pair<number>>((width+1) * (height+1));
     this.solidMap = new Array<boolean>(this.width* this.height);
 
     this.initSolidMap();
@@ -111,7 +112,7 @@ export class Grid {
     const vx = this.sampleU(px, py);
     const vy = this.sampleV(px, py);
 
-    // Your Pair constructor is Pair(top, left), which translates to Pair(V, U).
+    // Pair constructor is Pair(top, left), which translates to Pair(V, U).
     // Be careful with this order!
     return new Pair<number>(vy, vx); 
   }
@@ -160,7 +161,12 @@ export class Grid {
     return this.solidMap[cellIndex];
   }
 
-  //todo: get velocity looks at cell to the right and clamp? 
+  // todo: getVelocity looks at cell to the right and clamp? 
+  iteratePressureUpdates() {
+    for (let i = 0; i < 20; i++) {
+      this.updatePressures();
+    }
+  }
 
   updatePressures() {
     const l = this.pressures.length;
@@ -181,7 +187,6 @@ export class Grid {
         this.pressures[i] = 0;
         continue;
       }
-
       const pSum = p.t.val * p.t.notSolid + p.l.val * p.l.notSolid + p.r.val * p.r.notSolid + p.b.val * p.b.notSolid;
       const deltaVelocitySum = v.r * p.r.notSolid - v.l * p.l.notSolid + v.b * p.b.notSolid - v.t * p.t.notSolid; 
 
@@ -222,6 +227,63 @@ export class Grid {
       }
 
       this.velocities[vi] = new Pair(vTop, vLeft);
+    }
+  }
+
+  advectVelocities() {
+    const l = this.pressures.length;    
+    for (let i = 0; i < l; i++) {
+      const x = i % this.width;
+      const y = Math.floor(i / this.width);
+      const vi = i + y;
+
+      if (this.isSolid(i)) {
+        this.temp_velocities[vi] = new Pair(0, 0);
+        continue;
+      }
+
+      const isTopSolid = (y - 1 < 0) || this.isSolid(i - this.width);
+      const isLeftSolid = (x - 1 < 0) || this.isSolid(i - 1);
+
+      let newLeftVel = 0;
+      if (!isLeftSolid) {
+        const faceUX = x * this.cellSize.x;
+        const faceUY = (y + 0.5) * this.cellSize.y;
+
+        const velAtFaceU = this.sampleBilinear(faceUX, faceUY);
+        
+        const prevX = faceUX - velAtFaceU.left * this.timeStep;
+        const prevY = faceUY - velAtFaceU.top * this.timeStep;
+
+        // sampleU expects grid coordinates, so we divide by cellSize
+        newLeftVel = this.sampleU(prevX / this.cellSize.x, prevY / this.cellSize.y);
+      }
+
+      let newTopVel = 0;
+      if (!isTopSolid) {
+        const faceVX = (x + 0.5) * this.cellSize.x;
+        const faceVY = y * this.cellSize.y;
+
+        const velAtFaceV = this.sampleBilinear(faceVX, faceVY);
+
+        const prevX = faceVX - velAtFaceV.left * this.timeStep;
+        const prevY = faceVY - velAtFaceV.top * this.timeStep;
+
+        newTopVel = this.sampleV(prevX / this.cellSize.x, prevY / this.cellSize.y);
+      }
+
+      this.temp_velocities[vi] = new Pair(newTopVel, newLeftVel);
+    }
+
+    this.updateVelocitiesFromTemp();
+  }
+
+  index: number | null = null;
+
+  updateVelocitiesFromTemp() {
+    for (let i = 0; i < this.velocities.length; i++) {
+      if (this.temp_velocities[i] === undefined) continue;
+        this.velocities[i] = Pair.copy(this.temp_velocities[i]); // todo: make the Pair<> class be copied by default      
     }
   }
 
