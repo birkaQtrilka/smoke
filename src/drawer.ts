@@ -2,6 +2,8 @@ import { Grid } from "./grid";
 import { INVALID } from "./invalid.const";
 
 export const VELOCITY_SCALE = 1;
+type drawMode = 'pressure' | 'speed';
+
 export class GridDrawer {
   private readonly ctx: CanvasRenderingContext2D;
   public readonly offsetX: number;
@@ -9,6 +11,7 @@ export class GridDrawer {
   public showPressureTxt: boolean = false;
   public showVelocities: boolean = true;
   public showField: boolean = true;
+  public drawMode: drawMode = 'pressure';
 
   constructor(
     private readonly grid: Grid,
@@ -30,7 +33,12 @@ export class GridDrawer {
     this.ctx.fillStyle = 'white';
     this.ctx.fillRect(0, 0,this.canvas.width, this.canvas.height);
     this.ctx.restore();
-    this.drawPressures();
+    switch (this.drawMode) {
+      case 'pressure':
+        this.drawPressures();
+        break;
+      
+    }
     if(this.showVelocities) this.drawVelocities();
     if(this.showField) this.drawFlow();
   }
@@ -148,21 +156,35 @@ export class GridDrawer {
     
     ctx.strokeStyle = 'black';
     ctx.fillStyle = 'red';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = .6;
     for (let y = 0; y < vel_w; y++) {
       for (let x = 0; x < vel_h; x++) {
         const leftX = x * cellWidth;
         const topY = y * cellHeight;
         const vel = grid.sampleBilinear(leftX, topY);
-        
-        const endX = leftX + vel.left * VELOCITY_SCALE;
-        const endY = topY + vel.top * VELOCITY_SCALE;
+        const {x: end, y: end2} = this.clampVectorLength(vel.left , vel.top , 10);
+        const endX = leftX + end * VELOCITY_SCALE;
+        const endY = topY + end2 * VELOCITY_SCALE;
 
         this.drawArrow(ctx, leftX, topY, endX, endY, false);
       }
     }
        
   }
+
+  clampVectorLength(x: number, y: number, maxLength: number): { x: number; y: number } {
+  const length = Math.sqrt(x * x + y * y);
+  
+  if (length > maxLength && length > 0) {
+    const scale = maxLength / length;
+    return { 
+      x: x * scale, 
+      y: y * scale 
+    };
+  }
+  
+  return { x, y };
+}
 
   private drawArrow(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, head: boolean = true) {
     const headLength = 6; // length of the arrow head in pixels

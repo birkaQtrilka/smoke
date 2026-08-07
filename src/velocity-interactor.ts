@@ -1,14 +1,13 @@
-import { VELOCITY_SCALE } from "./drawer";
 import { Grid } from "./grid";
 import { INVALID } from "./invalid.const";
+import { Queue } from "./queue";
 
 export class VelocityInteractor {
   private isDragging = false;
-  private activeEdge: { pressureIndex: number, type: 't' | 'l' | 'b' | 'r' } | null = null;
   private lastMousePos: { x: number, y: number } | null = null;
-  
-  // Max distance from edge center to click (in scaled pixels)
-  private readonly interactionRadius = 15; 
+  private q: Queue<{ i: number, t: number, l: number, b: number, r: number }> = new Queue();
+  // Radius of the brush (in scaled pixels)
+  private readonly brushRadius = 30; // Increased radius to act as a proper brush
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -41,81 +40,101 @@ export class VelocityInteractor {
   }
 
   private onMouseDown = (e: MouseEvent) => {
-    const pos = this.getAdjustedPos(e);
-    const cellX = Math.floor(pos.x / this.grid.cellSize.x);
-    const cellY = Math.floor(pos.y / this.grid.cellSize.y);
-
-    if (cellX < 0 || cellX >= this.grid.width || cellY < 0 || cellY >= this.grid.height) return;
-
-    const cx = cellX * this.grid.cellSize.x;
-    const cy = cellY * this.grid.cellSize.y;
-    const cw = this.grid.cellSize.x;
-    const ch = this.grid.cellSize.y;
-
-    // Define center points for the 4 edges of the current cell
-    const edges = [
-      { type: 't', x: cx + cw / 2, y: cy },
-      { type: 'l', x: cx, y: cy + ch / 2 },
-      { type: 'b', x: cx + cw / 2, y: cy + ch },
-      { type: 'r', x: cx + cw, y: cy + ch / 2 }
-    ];
-
-    let closestEdge = null;
-    let minDistance = Infinity;
-
-    for (const edge of edges) {
-      const dx = pos.x - edge.x;
-      const dy = pos.y - edge.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestEdge = edge;
-      }
-    }
-
-    if (minDistance <= this.interactionRadius && closestEdge) {
-      this.isDragging = true;
-      this.activeEdge = {
-        pressureIndex: cellY * this.grid.width + cellX,
-        type: closestEdge.type as 't' | 'l' | 'b' | 'r'
-      };
-      this.lastMousePos = pos;
-    }
+    this.isDragging = true;
+    this.lastMousePos = this.getAdjustedPos(e);
   }
 
   private onMouseMove = (e: MouseEvent) => {
-    if (!this.isDragging || !this.activeEdge || !this.lastMousePos) return;
+    if (!this.isDragging || !this.lastMousePos) return;
 
     const pos = this.getAdjustedPos(e);
     const deltaX = pos.x - this.lastMousePos.x;
     const deltaY = pos.y - this.lastMousePos.y;
     this.lastMousePos = pos;
-    // to do, change logic to be implementation agnostic
-    const pIndex = this.activeEdge.pressureIndex;
-    const y = Math.floor(pIndex / this.grid.width);
-    const vi = pIndex + y;
 
-    // Use INVALID to preserve untouched values inside your setVelocities method
-    let t = INVALID, l = INVALID, b = INVALID, r = INVALID;
+    // Prevent unnecessary loops if the mouse didn't actually move
+    if (deltaX === 0 && deltaY === 0) return; 
 
-    // Add delta scaled down by drawing scale so the arrow perfectly follows the cursor
-    if (this.activeEdge.type === 't') {
-      t = this.grid.velocities[vi].top + (deltaY / VELOCITY_SCALE);
-    } else if (this.activeEdge.type === 'l') {
-      l = this.grid.velocities[vi].left + (deltaX / VELOCITY_SCALE);
-    } else if (this.activeEdge.type === 'b') {
-      b = this.grid.velocities[vi + this.grid.width + 1].top + (deltaY / VELOCITY_SCALE);
-    } else if (this.activeEdge.type === 'r') {
-      r = this.grid.velocities[vi + 1].left + (deltaX / VELOCITY_SCALE);
+    const cw = this.grid.cellSize.x;
+    const ch = this.grid.cellSize.y;
+
+    // Calculate a bounding box of cells to avoid checking the entire grid
+    const minX = Math.max(0, Math.floor((pos.x - this.brushRadius) / cw));
+    const maxX = Math.min(this.grid.width - 1, Math.floor((pos.x + this.brushRadius) / cw));
+    const minY = Math.max(0, Math.floor((pos.y - this.brushRadius) / ch));
+    const maxY = Math.min(this.grid.height - 1, Math.floor((pos.y + this.brushRadius) / ch));
+
+    const forceX = deltaX * 3;
+    const forceY = deltaY * 3;
+
+    for (let cy = minY; cy <= maxY; cy++) {
+      for (let cx = minX; cx <= maxX; cx++) {
+        const pIndex = cy * this.grid.width + cx;
+        const cellX_px = cx * cw;
+        const cellY_px = cy * ch;
+
+        // Define center points for the 4 edges of the current cell
+        const edges = {
+          t: { x: cellX_px + cw / 2, y: cellY_px },
+          l: { x: cellX_px, y: cellY_px + ch / 2 },
+          b: { x: cellX_px + cw / 2, y: cellY_px + ch },
+          r: { x: cellX_px + cw, y: cellY_px + ch / 2 }
+        };
+
+        const velocities = this.grid.getVelocities(pIndex);
+        let t = INVALID, l = INVALID, b = INVALID, r = INVALID;
+        let changed = false;
+
+        // Linear falloff helper: 1 at the center of the brush, scaling down to 0 at the edge
+        const getFalloff = (edgeX: number, edgeY: number) => {
+          const dist = Math.sqrt((pos.x - edgeX) ** 2 + (pos.y - edgeY) ** 2);
+          return dist < this.brushRadius ? 1 - (dist / this.brushRadius) : 0;
+        };
+
+        // Y-axis Velocities
+        const falloffT = getFalloff(edges.t.x, edges.t.y);
+        if (falloffT > 0) {
+          t = velocities.t + forceY * falloffT;
+          changed = true;
+        }
+
+        const falloffB = getFalloff(edges.b.x, edges.b.y);
+        if (falloffB > 0) {
+          b = velocities.b + forceY * falloffB;
+          changed = true;
+        }
+
+        // X-axis Velocities
+        const falloffL = getFalloff(edges.l.x, edges.l.y);
+        if (falloffL > 0) {
+          l = velocities.l + forceX * falloffL;
+          changed = true;
+        }
+
+        const falloffR = getFalloff(edges.r.x, edges.r.y);
+        if (falloffR > 0) {
+          r = velocities.r + forceX * falloffR;
+          changed = true;
+        }
+
+        // Update the grid cell only if it was affected by the brush
+        if (changed) {
+          this.q.enqueue({i: pIndex, t, l, b, r})
+        }
+      }
     }
+  }
 
-    // Call your implemented method on the grid
-    this.grid.setVelocities(pIndex, t, l, b, r);
+  public applyVelocities(){
+    while(!this.q.isEmpty()) {
+      const data = this.q.dequeue();
+      if(!data) continue;
+      this.grid.setVelocities(data.i,data.t, data.l, data.b, data.r);
+    }
   }
 
   private onMouseUp = () => {
     this.isDragging = false;
-    this.activeEdge = null;
     this.lastMousePos = null;
   }
 }

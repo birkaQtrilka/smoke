@@ -17,8 +17,8 @@ import { GridDrawer } from '../drawer';
 export class App {
   canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   ctx: CanvasRenderingContext2D | undefined;
-  readonly width = 800;
-  readonly height = 800;
+  readonly width = 900;
+  readonly height = 900;
   readonly timeStep = 0.001;
   readonly density = 1;
   interactor: VelocityInteractor | null = null; 
@@ -38,7 +38,7 @@ export class App {
 
       const scaleFactor = 1;
       
-      this.grid = new Grid(20, 20, this.density, this.timeStep);
+      this.grid = new Grid(30, 30, this.density, this.timeStep);
       this.grid.cellSize = new Vec2(canvas.width / this.grid.width, canvas.height / this.grid.height);
       const grid = this.grid;
 
@@ -71,6 +71,7 @@ export class App {
         let simulationUpdated = false;
 
         while (accumulator >= fixedTimeStepMs) {
+          this.interactor?.applyVelocities();
           if(this.solver) grid.iteratePressureUpdates();
           grid.updateVelocities();
 
